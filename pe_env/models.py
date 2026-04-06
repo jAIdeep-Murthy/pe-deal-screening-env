@@ -1,77 +1,113 @@
-from typing import Any, Dict, List, Optional
-from openenv.core.env_server import Action, Observation, State
+"""Pydantic models for the PE Deal Screening OpenEnv environment."""
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, Field
 
 
-class TriageObservation(Observation):
-    task_id: str = "deal_triage"
+# ---------------------------------------------------------------------------
+# Shared / base models
+# ---------------------------------------------------------------------------
+
+class DealTeaser(BaseModel):
+    """A single inbound deal teaser."""
     company_name: str
     sector: str
-    geography: str
+    revenue_mm: float = Field(..., description="Revenue in $MM")
+    ebitda_mm: float = Field(..., description="EBITDA in $MM")
+    ebitda_margin_pct: float = Field(..., description="EBITDA margin %")
+    revenue_growth_pct: float = Field(..., description="YoY revenue growth %")
+    asking_ev_ebitda: float = Field(..., description="Asking EV/EBITDA multiple")
+    net_debt_mm: float = Field(..., description="Net debt in $MM")
+    net_debt_ebitda: float = Field(..., description="Net Debt / EBITDA")
+    founded_year: int
+    hq_country: str
+    deal_context: Optional[str] = None  # extra narrative for IC memo task
+
+
+class PortfolioDeal(BaseModel):
+    """A deal within a portfolio prioritization task."""
+    company_name: str
+    sector: str
     revenue_mm: float
     ebitda_mm: float
     ebitda_margin_pct: float
-    leverage_x: float
-    mandate_sectors: List[str]
-    mandate_geographies: List[str]
-    mandate_ebitda_min_mm: float
-    mandate_ebitda_max_mm: float
-    mandate_margin_min_pct: float
-    mandate_leverage_max_x: float
-    instructions: str = "Evaluate the deal against the fund mandate. Respond with JSON: {\"decision\": \"PASS|LIGHT_DD|DEEP_DIVE\", \"reason\": \"...\"}"
+    revenue_growth_pct: float
+    asking_ev_ebitda: float
+    net_debt_ebitda: float
+    expected_irr_pct: float = Field(..., description="Expected IRR %")
+    risk_score: float = Field(..., ge=0.0, le=1.0, description="Risk score 0-1")
 
 
-class TriageAction(Action):
-    decision: str
-    reason: str
+# ---------------------------------------------------------------------------
+# Observations (what the agent sees)
+# ---------------------------------------------------------------------------
+
+class DealScreeningObservation(BaseModel):
+    task: Literal["deal_screening"] = "deal_screening"
+    episode_id: str
+    step: int = 0
+    deal: DealTeaser
 
 
-class MemoObservation(Observation):
-    task_id: str = "ic_memo"
+class ICMemoObservation(BaseModel):
+    task: Literal["ic_memo"] = "ic_memo"
+    episode_id: str
+    step: int = 0
+    deal: DealTeaser
+
+
+class PortfolioPrioritizationObservation(BaseModel):
+    task: Literal["portfolio_prioritization"] = "portfolio_prioritization"
+    episode_id: str
+    step: int = 0
+    portfolio: List[PortfolioDeal]
+    fund_size_mm: float = 100.0
+    max_single_pct: float = 40.0
+    min_position_pct: float = 10.0
+
+
+# ---------------------------------------------------------------------------
+# Actions (what the agent returns)
+# ---------------------------------------------------------------------------
+
+class DealScreeningAction(BaseModel):
+    decision: Literal["INVEST", "PASS"]
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    rationale: str = Field(..., min_length=20)
+
+
+class ICMemoAction(BaseModel):
+    executive_summary: str = Field(..., min_length=50)
+    investment_thesis: str = Field(..., min_length=50)
+    key_risks: str = Field(..., min_length=30)
+    financial_highlights: str = Field(..., min_length=30)
+    recommendation: Literal["INVEST", "PASS", "CONDITIONAL"]
+
+
+class AllocationItem(BaseModel):
     company_name: str
-    sector: str
-    geography: str
-    revenue_y1_mm: float
-    revenue_y2_mm: float
-    revenue_y3_mm: float
-    ebitda_y1_mm: float
-    ebitda_y2_mm: float
-    ebitda_y3_mm: float
-    fcf_y3_mm: float
-    market_notes: str
-    risk_notes: str
-    entry_ev_mm: float
-    target_irr_pct: float
-    required_positives: List[str]
-    required_risks: List[str]
-    instructions: str = "Write an IC memo with sections: ## Investment Thesis\n## Key Risks\n## Next Steps"
-
-
-class MemoAction(Action):
-    memo_text: str
-
-
-class PortfolioObservation(Observation):
-    task_id: str = "portfolio_prioritization"
-    candidates: List[Dict[str, Any]]
-    fund_size_mm: float
-    max_single_deal_pct: float
-    sector_cap_pct: float
-    target_portfolio_irr_min: float
-    target_portfolio_irr_max: float
-    min_deals: int
-    max_deals: int
-    instructions: str = "Select deals satisfying constraints. Respond with JSON: {\"selected_deals\": [...], \"allocations\": {\"id\": 0.25}, \"rationale\": \"...\"}"
-
-
-class PortfolioAction(Action):
-    selected_deals: List[str]
-    allocations: Dict[str, float]
+    allocation_mm: float = Field(..., ge=0.0)
+    allocation_pct: float = Field(..., ge=0.0, le=100.0)
     rationale: str
 
 
-class DealState(State):
-    task_id: str = ""
-    seed: int = 0
-    ground_truth: Optional[str] = None
-    checklist_items: Optional[int] = None
-    constraint_violations: int = 0
+class PortfolioPrioritizationAction(BaseModel):
+    allocations: List[AllocationItem]
+    total_deployed_mm: float
+    rationale: str = Field(..., min_length=50)
+
+
+# ---------------------------------------------------------------------------
+# Step response
+# ---------------------------------------------------------------------------
+
+class StepResult(BaseModel):
+    observation: Optional[Dict[str, Any]] = None
+    reward: float
+    done: bool
+    info: Dict[str, Any] = {}
+
+
+class ResetResponse(BaseModel):
+    observation: Dict[str, Any]
+    episode_id: str
+    task: str
