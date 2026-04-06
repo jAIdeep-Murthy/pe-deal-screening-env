@@ -1,4 +1,5 @@
 """FastAPI application for PE Deal Screening OpenEnv."""
+import os
 import sys
 sys.path.insert(0, "/app")
 
@@ -109,3 +110,15 @@ def get_episode(episode_id: str):
         "done": ep["done"],
         "seed": ep["seed"],
     }
+
+
+def main(host: str = "0.0.0.0", port: int | None = None):
+    """Run the PE Deal Screening environment server with uvicorn."""
+    import uvicorn
+    if port is None:
+        port = int(os.getenv("API_PORT", "7860"))
+    uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()
