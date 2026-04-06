@@ -155,3 +155,12 @@ def step(episode_id: str, action: Dict[str, Any]) -> StepResult:
 def get_episode(episode_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve episode state (for debugging)."""
     return _episodes.get(episode_id)
+
+def get_state() -> Dict[str, Any]:
+    """Get overall environment state."""
+    return {
+        "active_episodes": len(_episodes),
+        "tasks": TASKS,
+        "status": "ready",
+    }
+    return _episodes.get(episode_id)
