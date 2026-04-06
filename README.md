@@ -38,7 +38,7 @@ This environment trains and evaluates AI agents on real-world financial judgment
 **Example observation:**
 ```json
 {
-  "task_id": "deal_triage",
+    "task_id": "deal_screening",
   "company_name": "Summit Software",
   "sector": "Technology",
   "geography": "North America",
@@ -134,7 +134,7 @@ All rewards provide **partial credit** — no binary pass/fail:
 
 | Task | Avg Score |
 |---|---|
-| deal_triage | ~0.75 |
+| deal_screening | ~0.75 |
 | ic_memo | ~0.70 |
 | portfolio_prioritization | ~0.55 |
 | **Overall** | **~0.67** |
@@ -198,7 +198,7 @@ Deploy as a Docker Space:
 1. Create Space at huggingface.co/new-space (SDK: Docker)
 2. Push this repo or link to GitHub
 3. Set `HF_TOKEN` as a Space secret
-4. Space URL: `https://huggingface.co/spaces/jAIdeep-Murthy/pe-deal-screening-env`
+4. Space URL: `https://huggingface.co/spaces/JaideepM/pe-deal-screening-env`
 
 ---
 
