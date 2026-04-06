@@ -4,3 +4,107 @@ type: space
 runtime: fastapi
 app: server.app:app
 port: 7860
+
+description: |
+  OpenEnv environment for PE deal screening, IC memo writing & portfolio prioritization.
+  Trains and evaluates AI agents on real-world private equity analyst workflows.
+
+author: jAIdeep-Murthy
+tags:
+  - finance
+  - private-equity
+  - decision-making
+  - multi-task
+
+tasks:
+  - id: deal_screening
+    name: Deal Screening
+    difficulty: easy
+    description: |
+      Given an inbound deal teaser (company name, sector, revenue, EBITDA, growth rate,
+      asking multiple, debt load), decide PASS or INVEST and provide a confidence score.
+    observation_keys:
+      - company_name
+      - sector
+      - revenue_mm
+      - ebitda_mm
+      - ebitda_margin_pct
+      - revenue_growth_pct
+      - asking_ev_ebitda
+      - net_debt_mm
+      - net_debt_ebitda
+      - founded_year
+      - hq_country
+    action_keys:
+      - decision
+      - confidence
+      - rationale
+    reward:
+      type: rule_based
+      max_score: 1.0
+      rubric:
+        correct_decision: 0.6
+        confidence_calibration: 0.2
+        rationale_quality: 0.2
+
+  - id: ic_memo
+    name: IC Memo Writing
+    difficulty: medium
+    description: |
+      Given a screened deal that passed initial screening, write a concise Investment
+      Committee memo covering: Executive Summary, Investment Thesis, Key Risks,
+      Financial Highlights, and Recommendation.
+    observation_keys:
+      - company_name
+      - sector
+      - revenue_mm
+      - ebitda_mm
+      - ebitda_margin_pct
+      - revenue_growth_pct
+      - asking_ev_ebitda
+      - net_debt_mm
+      - net_debt_ebitda
+      - founded_year
+      - hq_country
+      - deal_context
+    action_keys:
+      - executive_summary
+      - investment_thesis
+      - key_risks
+      - financial_highlights
+      - recommendation
+    reward:
+      type: rule_based
+      max_score: 1.0
+      rubric:
+        sections_present: 0.3
+        thesis_coherence: 0.3
+        risk_identification: 0.2
+        recommendation_alignment: 0.2
+
+  - id: portfolio_prioritization
+    name: Portfolio Prioritization
+    difficulty: hard
+    description: |
+      Given a portfolio of 5 candidate deals that passed screening, allocate a $100M
+      fund across them subject to: max 40% in any single deal, min 10% if included,
+      sector diversification constraints. Maximize risk-adjusted return.
+    observation_keys:
+      - portfolio
+    action_keys:
+      - allocations
+      - total_deployed
+      - rationale
+    reward:
+      type: rule_based
+      max_score: 1.0
+      rubric:
+        constraint_satisfaction: 0.4
+        return_optimization: 0.4
+        rationale_quality: 0.2
+
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  health: GET /health
+  info: GET /info
