@@ -1,0 +1,28 @@
+name: Generate uv.lock
+
+on:
+  push:
+    paths:
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+jobs:
+  uv-lock:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Generate uv.lock
+        run: uv lock
+      - name: Commit uv.lock
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add uv.lock
+          git diff --staged --quiet || git commit -m "Auto-generate uv.lock via GitHub Actions"
+          git push
