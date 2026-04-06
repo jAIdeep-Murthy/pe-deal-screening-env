@@ -1,11 +1,15 @@
+"""Deterministic synthetic deal generator for PE Deal Screening environment."""
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
-SECTORS = ["Healthcare", "Technology", "Business Services", "Industrials",
-           "Consumer", "Financial Services", "Energy", "Education"]
+from pe_env.models import DealTeaser, PortfolioDeal
 
-GEOGRAPHIES = ["North America", "Western Europe", "DACH", "UK & Ireland",
-               "Nordics", "Southern Europe", "Southeast Asia"]
+SECTORS = [
+    "Healthcare", "Technology", "Business Services", "Industrials",
+    "Consumer", "Financial Services", "Energy", "Education",
+]
+
+COUNTRIES = ["USA", "UK", "Germany", "France", "Canada", "Australia", "Netherlands"]
 
 COMPANY_NAMES = [
     "Apex Analytics", "Bridgepoint Solutions", "Crestview Systems",
@@ -14,113 +18,145 @@ COMPANY_NAMES = [
     "Junction Healthcare", "Keystone Education", "Landmark Consumer",
     "Meridian Financial", "Northstar Energy", "Oaktree Logistics",
     "Pinnacle Business Services", "Quantum Technology", "Ridgeline Healthcare",
-    "Summit Software", "Thornberry Industrials",
+    "Summit Software", "Thornberry Industrials", "Unified Analytics",
+    "Vantage Consumer", "Westbrook Education", "Xcel Business Services",
+    "Yellowstone Energy", "Zenith Technology",
 ]
 
-MARKET_NOTES = [
-    "Fragmented market with 200+ competitors; top-3 hold ~30% share. Secular tailwind from digital transformation. TAM growing ~12% p.a.",
-    "Consolidated market dominated by 2 incumbents. Strong pricing power. Regulatory moat. Recurring revenue >80%.",
-    "Niche B2B market with sticky customer relationships. Low churn (<5% p.a.), long contract durations (avg 4.2 years).",
+DEAL_CONTEXTS = [
+    "Founder-led business seeking growth capital; management team has 15+ years experience.",
+    "PE-backed company pursuing a buy-and-build strategy in a fragmented market.",
+    "Corporate carve-out with strong standalone prospects and clean financials.",
+    "Family-owned business in transition; second-generation management.",
+    "Tech-enabled services platform with recurring revenue model.",
+    "Asset-light distribution business with strong FCF conversion.",
+    "SaaS platform serving mid-market enterprise clients with 95%+ gross retention.",
+    "Healthcare services platform benefiting from favorable demographic tailwinds.",
 ]
 
 
-def make_triage_scenario(seed: int) -> Dict[str, Any]:
-    rng = random.Random(seed)
+def _rng(seed: int) -> random.Random:
+    return random.Random(seed)
+
+
+def generate_deal(seed: int) -> DealTeaser:
+    """Generate a single deterministic deal teaser from a seed."""
+    rng = _rng(seed)
     sector = rng.choice(SECTORS)
-    geography = rng.choice(GEOGRAPHIES)
-    name = rng.choice(COMPANY_NAMES)
-    ebitda_mm = round(rng.uniform(5, 120), 1)
-    revenue_mm = round(ebitda_mm / rng.uniform(0.10, 0.45), 1)
-    ebitda_margin_pct = round((ebitda_mm / revenue_mm) * 100, 1)
-    leverage_x = round(rng.uniform(1.0, 6.5), 1)
-    mandate_sectors = rng.sample(SECTORS, k=3)
-    if rng.random() < 0.6 and sector not in mandate_sectors:
-        mandate_sectors[0] = sector
-    mandate_geos = rng.sample(GEOGRAPHIES, k=3)
-    if rng.random() < 0.6 and geography not in mandate_geos:
-        mandate_geos[0] = geography
-    mandate_ebitda_min = round(rng.uniform(5, 30), 0)
-    mandate_ebitda_max = round(mandate_ebitda_min + rng.uniform(20, 90), 0)
-    mandate_margin_min = round(rng.uniform(8, 20), 1)
-    mandate_leverage_max = round(rng.uniform(3.5, 5.5), 1)
-    sector_fit = sector in mandate_sectors
-    geo_fit = geography in mandate_geos
-    ebitda_fit = mandate_ebitda_min <= ebitda_mm <= mandate_ebitda_max
-    margin_fit = ebitda_margin_pct >= mandate_margin_min
-    leverage_fit = leverage_x <= mandate_leverage_max
-    fit_count = sum([sector_fit, geo_fit, ebitda_fit, margin_fit, leverage_fit])
-    if not sector_fit or not geo_fit:
-        ground_truth = "PASS"
-    elif fit_count == 5:
-        ground_truth = "DEEP_DIVE"
-    elif fit_count >= 3:
-        ground_truth = "LIGHT_DD"
-    else:
-        ground_truth = "PASS"
-    return {
-        "company_name": name, "sector": sector, "geography": geography,
-        "revenue_mm": revenue_mm, "ebitda_mm": ebitda_mm,
-        "ebitda_margin_pct": ebitda_margin_pct, "leverage_x": leverage_x,
-        "mandate_sectors": mandate_sectors, "mandate_geographies": mandate_geos,
-        "mandate_ebitda_min_mm": mandate_ebitda_min, "mandate_ebitda_max_mm": mandate_ebitda_max,
-        "mandate_margin_min_pct": mandate_margin_min, "mandate_leverage_max_x": mandate_leverage_max,
-        "ground_truth": ground_truth,
-        "fit_flags": {"sector_fit": sector_fit, "geo_fit": geo_fit,
-                      "ebitda_fit": ebitda_fit, "margin_fit": margin_fit, "leverage_fit": leverage_fit},
-    }
+    revenue_mm = round(rng.uniform(20, 500), 1)
+    ebitda_margin_pct = round(rng.uniform(8, 40), 1)
+    ebitda_mm = round(revenue_mm * ebitda_margin_pct / 100, 1)
+    revenue_growth_pct = round(rng.uniform(-5, 35), 1)
+    asking_ev_ebitda = round(rng.uniform(5, 20), 1)
+    net_debt_ebitda = round(rng.uniform(0, 6), 2)
+    net_debt_mm = round(ebitda_mm * net_debt_ebitda, 1)
+    founded_year = rng.randint(1985, 2018)
+    company_name = rng.choice(COMPANY_NAMES) + f" {rng.randint(1, 99)}"
+    hq_country = rng.choice(COUNTRIES)
+    deal_context = rng.choice(DEAL_CONTEXTS)
+
+    return DealTeaser(
+        company_name=company_name,
+        sector=sector,
+        revenue_mm=revenue_mm,
+        ebitda_mm=ebitda_mm,
+        ebitda_margin_pct=ebitda_margin_pct,
+        revenue_growth_pct=revenue_growth_pct,
+        asking_ev_ebitda=asking_ev_ebitda,
+        net_debt_mm=net_debt_mm,
+        net_debt_ebitda=net_debt_ebitda,
+        founded_year=founded_year,
+        hq_country=hq_country,
+        deal_context=deal_context,
+    )
 
 
-def make_memo_scenario(seed: int) -> Dict[str, Any]:
-    rng = random.Random(seed + 1000)
-    sector = rng.choice(SECTORS)
-    geography = rng.choice(GEOGRAPHIES)
-    name = rng.choice(COMPANY_NAMES)
-    ebitda_y1 = round(rng.uniform(15, 60), 1)
-    growth = rng.uniform(0.08, 0.25)
-    ebitda_y2 = round(ebitda_y1 * (1 + growth), 1)
-    ebitda_y3 = round(ebitda_y2 * (1 + growth * rng.uniform(0.7, 1.2)), 1)
-    margin_y1 = rng.uniform(0.15, 0.35)
-    revenue_y1 = round(ebitda_y1 / margin_y1, 1)
-    revenue_y2 = round(ebitda_y2 / (margin_y1 + rng.uniform(0, 0.03)), 1)
-    revenue_y3 = round(ebitda_y3 / (margin_y1 + rng.uniform(0, 0.05)), 1)
-    fcf_y3 = round(ebitda_y3 * rng.uniform(0.65, 0.90), 1)
-    entry_ev = round(ebitda_y3 * rng.uniform(8, 14), 1)
-    target_irr = round(rng.uniform(18, 30), 1)
-    market_note = rng.choice(MARKET_NOTES)
-    risk_names = ["customer concentration", "key-man risk", "leverage", "technology disruption", "macro sensitivity"]
-    rng.shuffle(risk_names)
-    chosen_risks = risk_names[:rng.randint(2, 3)]
-    positives = ["revenue growth", "margin expansion", "strong FCF conversion", "recurring revenue model"]
-    rng.shuffle(positives)
-    chosen_positives = positives[:2]
-    risk_note = "; ".join([f"{r} risk present" for r in chosen_risks])
-    return {
-        "company_name": name, "sector": sector, "geography": geography,
-        "revenue_y1_mm": revenue_y1, "revenue_y2_mm": revenue_y2, "revenue_y3_mm": revenue_y3,
-        "ebitda_y1_mm": ebitda_y1, "ebitda_y2_mm": ebitda_y2, "ebitda_y3_mm": ebitda_y3,
-        "fcf_y3_mm": fcf_y3, "market_notes": market_note, "risk_notes": risk_note,
-        "entry_ev_mm": entry_ev, "target_irr_pct": target_irr,
-        "required_positives": chosen_positives, "required_risks": chosen_risks,
-    }
+def compute_ground_truth_decision(deal: DealTeaser) -> str:
+    """Rule-based ground truth for deal screening (INVEST or PASS)."""
+    # Hard pass criteria
+    if deal.ebitda_margin_pct < 10:
+        return "PASS"
+    if deal.net_debt_ebitda > 5.0:
+        return "PASS"
+    if deal.asking_ev_ebitda > 16:
+        return "PASS"
+    if deal.revenue_growth_pct < 0:
+        return "PASS"
+    # Green-light criteria
+    if (
+        deal.ebitda_margin_pct >= 15
+        and deal.revenue_growth_pct >= 8
+        and deal.asking_ev_ebitda <= 12
+        and deal.net_debt_ebitda <= 3.5
+    ):
+        return "INVEST"
+    # Borderline - use scoring
+    score = 0
+    if deal.ebitda_margin_pct >= 12:
+        score += 1
+    if deal.revenue_growth_pct >= 5:
+        score += 1
+    if deal.asking_ev_ebitda <= 13:
+        score += 1
+    if deal.net_debt_ebitda <= 4.0:
+        score += 1
+    return "INVEST" if score >= 3 else "PASS"
 
 
-def make_portfolio_scenario(seed: int) -> Dict[str, Any]:
-    rng = random.Random(seed + 2000)
-    n = rng.randint(5, 6)
-    candidates = []
+def generate_portfolio(seed: int, n: int = 5) -> List[PortfolioDeal]:
+    """Generate a portfolio of n deals for prioritization task."""
+    rng = _rng(seed)
+    portfolio = []
+    sectors_used = set()
     for i in range(n):
-        s = rng.choice(SECTORS)
-        ebitda = round(rng.uniform(10, 80), 1)
-        ev = round(ebitda * rng.uniform(7, 13), 1)
-        irr = round(rng.uniform(15, 40), 1)
-        risk = round(rng.uniform(1.0, 5.0), 1)
-        candidates.append({"deal_id": f"D{i+1:02d}", "company_name": rng.choice(COMPANY_NAMES),
-                            "sector": s, "ebitda_mm": ebitda, "entry_ev_mm": ev,
-                            "target_irr_pct": irr, "risk_score": risk})
-    fund_size = round(rng.uniform(200, 600), 0)
-    return {
-        "candidates": candidates, "fund_size_mm": fund_size,
-        "max_single_deal_pct": 0.30, "sector_cap_pct": 0.50,
-        "target_portfolio_irr_min": 20.0, "target_portfolio_irr_max": 35.0,
-        "min_deals": 3, "max_deals": 4,
-    }
+        s = seed * 100 + i
+        deal = generate_deal(s)
+        expected_irr = round(rng.uniform(12, 35), 1)
+        risk_score = round(rng.uniform(0.1, 0.9), 2)
+        # Ensure at least some sector diversity
+        sector = deal.sector
+        if sector in sectors_used and len(sectors_used) < len(SECTORS):
+            remaining = [s for s in SECTORS if s not in sectors_used]
+            if remaining:
+                sector = rng.choice(remaining)
+        sectors_used.add(sector)
+        portfolio.append(
+            PortfolioDeal(
+                company_name=deal.company_name,
+                sector=sector,
+                revenue_mm=deal.revenue_mm,
+                ebitda_mm=deal.ebitda_mm,
+                ebitda_margin_pct=deal.ebitda_margin_pct,
+                revenue_growth_pct=deal.revenue_growth_pct,
+                asking_ev_ebitda=deal.asking_ev_ebitda,
+                net_debt_ebitda=deal.net_debt_ebitda,
+                expected_irr_pct=expected_irr,
+                risk_score=risk_score,
+            )
+        )
+    return portfolio
+
+
+def compute_optimal_allocation(portfolio: List[PortfolioDeal], fund_size_mm: float = 100.0) -> Dict[str, float]:
+    """Compute a heuristic optimal allocation (risk-adjusted IRR weighting)."""
+    scores = []
+    for deal in portfolio:
+        # Risk-adjusted IRR: higher IRR and lower risk = higher score
+        risk_adj = deal.expected_irr_pct * (1 - deal.risk_score)
+        scores.append(max(risk_adj, 0))
+    total = sum(scores)
+    if total == 0:
+        weights = [1 / len(portfolio)] * len(portfolio)
+    else:
+        weights = [s / total for s in scores]
+    # Apply constraints: max 40%, min 10% if included
+    alloc_pct = [w * 100 for w in weights]
+    # Cap at 40%
+    alloc_pct = [min(p, 40.0) for p in alloc_pct]
+    # Renormalize
+    total_pct = sum(alloc_pct)
+    alloc_pct = [p * 100 / total_pct for p in alloc_pct]
+    result = {}
+    for deal, pct in zip(portfolio, alloc_pct):
+        result[deal.company_name] = round(pct, 1)
+    return result
