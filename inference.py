@@ -1,5 +1,5 @@
 """inference.py - PE Deal Screening & IC Assistant baseline agent.
-Uses OpenAI-compatible client (Gemini, OpenAI, etc.) via env vars.
+Uses OpenAI API via env vars (API_BASE_URL, MODEL_NAME, HF_TOKEN).
 Emits [START], [STEP], [END] logs per hackathon spec.
 """
 import json
@@ -13,8 +13,8 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 # Configuration from environment variables (no hardcoded keys/URLs)
 # ---------------------------------------------------------------------------
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-MODEL_NAME = os.environ.get("MODEL_NAME", "gemini-1.5-flash")
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 API_KEY = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY", "")
 SPACE_URL = os.environ.get("SPACE_URL", "http://localhost:7860")
 
