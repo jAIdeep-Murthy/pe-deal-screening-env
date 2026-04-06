@@ -4,7 +4,7 @@ sys.path.insert(0, "/app")
 
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -26,7 +26,7 @@ app.add_middleware(
 
 
 class ResetRequest(BaseModel):
-    task: Optional[str] = None  # "deal_screening", "ic_memo", "portfolio_prioritization"
+    task: Optional[str] = None
     seed: Optional[int] = None
 
 
@@ -37,13 +37,11 @@ class StepRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    """Health check endpoint."""
     return {"status": "ok", "service": "pe-deal-screening-env"}
 
 
 @app.get("/info")
 def info():
-    """Environment info."""
     return {
         "name": "pe_deal_screening_env",
         "version": "1.0.0",
@@ -53,24 +51,46 @@ def info():
     }
 
 
-@app.post("/reset", response_model=ResetResponse)
-def reset(request: ResetRequest):
-    """Reset/start a new episode."""
+@app.post("/reset")
+async def reset(request: Request):
+    """Reset/start a new episode. Accepts optional JSON body with task and seed."""
     try:
-        result = env.reset(task=request.task, seed=request.seed)
-        return result
+        body = await request.body()
+        task = None
+        seed = None
+        if body:
+            import json
+            try:
+                data = json.loads(body)
+                task = data.get("task", None)
+                seed = data.get("seed", None)
+            except Exception:
+                pass
+        result = env.reset(task=task, seed=seed)
+        return result.model_dump()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {e}")
 
 
-@app.post("/step", response_model=StepResult)
-def step(request: StepRequest):
+@app.post("/step")
+async def step(request: Request):
     """Submit an action and get reward."""
     try:
-        result = env.step(episode_id=request.episode_id, action=request.action)
-        return result
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail="Request body required")
+        import json
+        data = json.loads(body)
+        episode_id = data.get("episode_id")
+        action = data.get("action", {})
+        if not episode_id:
+            raise HTTPException(status_code=400, detail="episode_id required")
+        result = env.step(episode_id=episode_id, action=action)
+        return result.model_dump()
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -79,11 +99,9 @@ def step(request: StepRequest):
 
 @app.get("/episode/{episode_id}")
 def get_episode(episode_id: str):
-    """Get episode state (debug endpoint)."""
     ep = env.get_episode(episode_id)
     if ep is None:
         raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
-    # Serialize safely
     return {
         "episode_id": episode_id,
         "task": ep["task"],
