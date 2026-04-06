@@ -10,6 +10,18 @@ from typing import Any, Dict, List, Optional
 import requests
 from openai import OpenAI
 
+
+
+def log_start(task: str, env: str, model: str):
+    print(json.dumps({"tag": "[START]", "task": task, "env": env, "model": model}), flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error=None):
+    print(json.dumps({"tag": "[STEP]", "step": step, "action": action, "reward": reward, "done": done, "error": error}), flush=True)
+
+
+def log_end(success: bool, steps: int, score: float, rewards: list):
+    print(json.dumps({"tag": "[END]", "success": success, "steps": steps, "score": score, "rewards": rewards}), flush=True)
 # ---------------------------------------------------------------------------
 # Configuration from environment variables (no hardcoded keys/URLs)
 # ---------------------------------------------------------------------------
@@ -131,9 +143,8 @@ def run_episode(client: OpenAI, task_name: str, episode_num: int) -> Dict:
     episode_id = reset_data["episode_id"]
     obs = reset_data["observation"]
 
-    print(f"[START] benchmark={BENCHMARK} task={task_name} episode={episode_num} episode_id={episode_id}")
-    sys.stdout.flush()
-
+    log_start(task_name, BENCHMARK, MODEL_NAME)
+    
     # Build prompt based on task
     if task_name == "deal_screening":
         prompt = build_deal_screening_prompt(obs)
@@ -160,9 +171,8 @@ def run_episode(client: OpenAI, task_name: str, episode_num: int) -> Dict:
     done = step_data["done"]
     info = step_data.get("info", {})
 
-    print(f"[STEP] episode_id={episode_id} step=1 reward={reward:.4f} done={done}")
-    print(f"[END] episode_id={episode_id} total_reward={reward:.4f}")
-    sys.stdout.flush()
+    log_step(1, str(action), reward, done)
+    log_end(done, 1, reward, [reward])
 
     return {"episode_id": episode_id, "reward": reward, "info": info}
 
