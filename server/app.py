@@ -5,12 +5,20 @@ sys.path.insert(0, "/app")
 
 from typing import Any, Dict, Optional
 
+import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import server.environment as env
-from pe_env.models import StepResult, ResetResponse
+from pe_env.models import (
+    DealScreeningObservation,
+    ICMemoObservation,
+    PortfolioPrioritizationObservation,
+    StepResult,
+    ResetResponse,
+)
 
 app = FastAPI(
     title="PE Deal Screening & IC Assistant",
@@ -36,62 +44,123 @@ class StepRequest(BaseModel):
     action: Dict[str, Any]
 
 
+@app.get("/")
+def root():
+    return {
+        "name": "pe_deal_screening_env",
+        "description": "OpenEnv environment for PE deal screening, IC memo writing & portfolio prioritization.",
+        "tasks": env.TASKS,
+        "status": "ready",
+    }
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "pe-deal-screening-env"}
+    """Health check endpoint - must return 'healthy'."""
+    return {"status": "healthy", "service": "pe-deal-screening-env"}
 
 
 @app.get("/info")
 def info():
+    """Environment info."""
     return {
         "name": "pe_deal_screening_env",
         "version": "1.0.0",
         "tasks": env.TASKS,
         "description": "PE deal screening, IC memo writing, and portfolio prioritization.",
-        "endpoints": ["/reset", "/step", "/health", "/info"],
+        "endpoints": ["/reset", "/step", "/health", "/info", "/metadata", "/schema", "/mcp"],
     }
 
 
-@app.post("/reset")
-async def reset(request: Request):
-    """Reset/start a new episode. Accepts optional JSON body with task and seed."""
+@app.get("/metadata")
+def metadata():
+    """Environment metadata."""
+    return {
+        "name": "pe_deal_screening_env",
+        "description": "OpenEnv environment for PE deal screening, IC memo writing & portfolio prioritization.",
+        "version": "1.0.0",
+        "tasks": env.TASKS,
+        "author": "jAIdeep-Murthy",
+        "tags": ["finance", "private-equity", "decision-making", "multi-task"],
+    }
+
+
+@app.get("/schema")
+def schema():
+    """Return JSON schemas for observations and actions."""
+    return {
+        "deal_screening": {
+            "observation": DealScreeningObservation.model_json_schema(),
+            "action": {
+                "type": "object",
+                "properties": {
+                    "decision": {"type": "string", "enum": ["INVEST", "PASS"]},
+                    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    "rationale": {"type": "string"},
+                },
+                "required": ["decision", "confidence", "rationale"],
+            },
+        },
+        "ic_memo": {
+            "observation": ICMemoObservation.model_json_schema(),
+            "action": {
+                "type": "object",
+                "properties": {
+                    "executive_summary": {"type": "string"},
+                    "investment_thesis": {"type": "string"},
+                    "key_risks": {"type": "string"},
+                    "financial_highlights": {"type": "string"},
+                    "recommendation": {"type": "string", "enum": ["INVEST", "PASS", "CONDITIONAL"]},
+                },
+                "required": ["executive_summary", "investment_thesis", "key_risks", "financial_highlights", "recommendation"],
+            },
+        },
+        "portfolio_prioritization": {
+            "observation": PortfolioPrioritizationObservation.model_json_schema(),
+            "action": {
+                "type": "object",
+                "properties": {
+                    "allocations": {"type": "array"},
+                    "total_deployed_mm": {"type": "number"},
+                    "rationale": {"type": "string"},
+                },
+                "required": ["allocations", "total_deployed_mm", "rationale"],
+            },
+        },
+    }
+
+
+@app.post("/mcp")
+def mcp(payload: dict = {}):
+    """MCP endpoint for tool discovery."""
+    return {
+        "jsonrpc": "2.0",
+        "id": payload.get("id"),
+        "result": {
+            "name": "pe_deal_screening_env",
+            "tools": ["reset", "step", "state"],
+        },
+    }
+
+
+@app.post("/reset", response_model=ResetResponse)
+def reset(request: ResetRequest):
+    """Reset/start a new episode."""
     try:
-        body = await request.body()
-        task = None
-        seed = None
-        if body:
-            import json
-            try:
-                data = json.loads(body)
-                task = data.get("task", None)
-                seed = data.get("seed", None)
-            except Exception:
-                pass
-        result = env.reset(task=task, seed=seed)
-        return result.model_dump()
+        result = env.reset(task=request.task, seed=request.seed)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {e}")
 
 
-@app.post("/step")
-async def step(request: Request):
+@app.post("/step", response_model=StepResult)
+def step(request: StepRequest):
     """Submit an action and get reward."""
     try:
-        body = await request.body()
-        if not body:
-            raise HTTPException(status_code=400, detail="Request body required")
-        import json
-        data = json.loads(body)
-        episode_id = data.get("episode_id")
-        action = data.get("action", {})
-        if not episode_id:
-            raise HTTPException(status_code=400, detail="episode_id required")
-        result = env.step(episode_id=episode_id, action=action)
-        return result.model_dump()
-    except HTTPException:
-        raise
+        result = env.step(episode_id=request.episode_id, action=request.action)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -100,6 +169,7 @@ async def step(request: Request):
 
 @app.get("/episode/{episode_id}")
 def get_episode(episode_id: str):
+    """Get episode state."""
     ep = env.get_episode(episode_id)
     if ep is None:
         raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
@@ -112,12 +182,10 @@ def get_episode(episode_id: str):
     }
 
 
-def main(host: str = "0.0.0.0", port: int | None = None):
-    """Run the PE Deal Screening environment server with uvicorn."""
-    import uvicorn
-    if port is None:
-        port = int(os.getenv("API_PORT", "7860"))
-    uvicorn.run(app, host=host, port=port)
+def main():
+    """Entry point for server script (required by pyproject.toml [project.scripts])."""
+    port = int(os.environ.get("PORT", 7860))
+    uvicorn.run("server.app:app", host="0.0.0.0", port=port, reload=False)
 
 
 if __name__ == "__main__":
