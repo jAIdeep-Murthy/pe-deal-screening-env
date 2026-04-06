@@ -49,16 +49,6 @@ class StepRequest(BaseModel):
     action: Dict[str, Any]
 
 
-@app.get("/")
-def root():
-    return {
-        "name": "pe_deal_screening_env",
-        "description": "OpenEnv environment for PE deal screening, IC memo writing & portfolio prioritization.",
-        "tasks": env.TASKS,
-        "status": "ready",
-    }
-
-
 @app.get("/health")
 def health():
     """Health check endpoint - must return 'healthy'."""
@@ -92,55 +82,82 @@ def metadata():
 
 @app.get("/schema")
 def schema():
-    """Return JSON schemas for observations and actions."""
+    """Return unified action, observation, and state schemas for OpenEnv compliance."""
+    deal_obs = DealScreeningObservation.model_json_schema()
+    deal_action = {
+        "type": "object",
+        "properties": {
+            "decision": {"type": "string", "enum": ["INVEST", "PASS"]},
+            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "rationale": {"type": "string"},
+        },
+        "required": ["decision", "confidence", "rationale"],
+    }
     return {
-        "deal_screening": {
-            "observation": DealScreeningObservation.model_json_schema(),
-            "action": {
-                "type": "object",
-                "properties": {
-                    "decision": {"type": "string", "enum": ["INVEST", "PASS"]},
-                    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                    "rationale": {"type": "string"},
-                },
-                "required": ["decision", "confidence", "rationale"],
+        "action": deal_action,
+        "observation": deal_obs,
+        "state": {
+            "type": "object",
+            "description": "Current environment state",
+            "properties": {
+                "episode_id": {"type": "string"},
+                "task": {"type": "string"},
+                "step": {"type": "integer"},
+                "done": {"type": "boolean"},
+                "observation": {"type": "object"},
             },
         },
-        "ic_memo": {
-            "observation": ICMemoObservation.model_json_schema(),
-            "action": {
-                "type": "object",
-                "properties": {
-                    "executive_summary": {"type": "string"},
-                    "investment_thesis": {"type": "string"},
-                    "key_risks": {"type": "string"},
-                    "financial_highlights": {"type": "string"},
-                    "recommendation": {"type": "string", "enum": ["INVEST", "PASS", "CONDITIONAL"]},
-                },
-                "required": ["executive_summary", "investment_thesis", "key_risks", "financial_highlights", "recommendation"],
+        "tasks": {
+            "deal_screening": {
+                "observation": deal_obs,
+                "action": deal_action,
             },
-        },
-        "portfolio_prioritization": {
-            "observation": PortfolioPrioritizationObservation.model_json_schema(),
-            "action": {
-                "type": "object",
-                "properties": {
-                    "allocations": {"type": "array"},
-                    "total_deployed_mm": {"type": "number"},
-                    "rationale": {"type": "string"},
+            "ic_memo": {
+                "observation": ICMemoObservation.model_json_schema(),
+                "action": {
+                    "type": "object",
+                    "properties": {
+                        "executive_summary": {"type": "string"},
+                        "investment_thesis": {"type": "string"},
+                        "key_risks": {"type": "string"},
+                        "financial_highlights": {"type": "string"},
+                        "recommendation": {"type": "string", "enum": ["INVEST", "PASS", "CONDITIONAL"]},
+                    },
+                    "required": ["executive_summary", "investment_thesis", "key_risks", "financial_highlights", "recommendation"],
                 },
-                "required": ["allocations", "total_deployed_mm", "rationale"],
+            },
+            "portfolio_prioritization": {
+                "observation": PortfolioPrioritizationObservation.model_json_schema(),
+                "action": {
+                    "type": "object",
+                    "properties": {
+                        "allocations": {"type": "array"},
+                        "total_deployed_mm": {"type": "number"},
+                        "rationale": {"type": "string"},
+                    },
+                    "required": ["allocations", "total_deployed_mm", "rationale"],
+                },
             },
         },
     }
 
 
+@app.get("/state")
+def get_state():
+    """Get current environment state."""
+    return env.get_state()
+
+
 @app.post("/mcp")
-def mcp(payload: dict = {}):
-    """MCP endpoint for tool discovery."""
+async def mcp(request: Request):
+    """MCP endpoint for tool discovery - returns JSON-RPC 2.0 payload."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
     return {
         "jsonrpc": "2.0",
-        "id": payload.get("id"),
+        "id": payload.get("id") if isinstance(payload, dict) else None,
         "result": {
             "name": "pe_deal_screening_env",
             "tools": ["reset", "step", "state"],
