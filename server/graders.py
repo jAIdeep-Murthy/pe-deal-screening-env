@@ -9,7 +9,7 @@ def grade_deal_screening(
     gt_decision: str,
     deal: DealTeaser,
 ) -> Tuple[float, Dict[str, Any]]:
-    """Grade Task 1: Deal Screening. Returns (reward, info) where reward in [0, 1]."""
+    """Grade Task 1: Deal Screening. Returns (reward, info) where reward in (0.001, 0.999)."""
     decision = str(action.get("decision", "")).strip().upper()
     confidence = float(action.get("confidence", 0.5))
     rationale = str(action.get("rationale", ""))
@@ -28,7 +28,6 @@ def grade_deal_screening(
     info["breakdown"]["decision_score"] = decision_score
 
     # 2. Confidence calibration (0.2 weight)
-    # Reward high confidence when correct, low confidence when wrong
     if decision_correct:
         calib_score = 0.2 * confidence
     else:
@@ -37,7 +36,6 @@ def grade_deal_screening(
 
     # 3. Rationale quality (0.2 weight)
     rationale_lower = rationale.lower()
-    # Check for relevant PE keywords
     keywords = [
         "ebitda", "margin", "revenue", "growth", "multiple", "debt",
         "leverage", "valuation", "sector", "risk", "cash flow",
@@ -53,7 +51,8 @@ def grade_deal_screening(
     info["breakdown"]["rationale_keyword_hits"] = keyword_hits
     info["breakdown"]["rationale_score"] = round(rationale_score, 3)
 
-    total = round(decision_score + calib_score + rationale_score, 4)
+    raw_total = round(decision_score + calib_score + rationale_score, 4)
+    total = float(max(0.001, min(0.999, raw_total)))
     info["total_reward"] = total
     return total, info
 
@@ -62,7 +61,7 @@ def grade_ic_memo(
     action: Dict[str, Any],
     deal: DealTeaser,
 ) -> Tuple[float, Dict[str, Any]]:
-    """Grade Task 2: IC Memo Writing. Returns (reward, info) where reward in [0, 1]."""
+    """Grade Task 2: IC Memo Writing. Returns (reward, info) where reward in (0.001, 0.999)."""
     exec_summary = str(action.get("executive_summary", ""))
     thesis = str(action.get("investment_thesis", ""))
     risks = str(action.get("key_risks", ""))
@@ -84,7 +83,6 @@ def grade_ic_memo(
     info["breakdown"]["sections_score"] = round(sections_score, 3)
 
     # 2. Thesis coherence (0.3 weight)
-    # Check that thesis mentions key financial metrics
     thesis_lower = thesis.lower()
     thesis_keywords = ["growth", "margin", "market", "competitive", "return", "value", "ebitda", "multiple"]
     thesis_hits = sum(1 for kw in thesis_keywords if kw in thesis_lower)
@@ -101,12 +99,12 @@ def grade_ic_memo(
     info["breakdown"]["risk_score"] = round(risk_score, 3)
 
     # 4. Recommendation alignment (0.2 weight)
-    # IC memo should recommend INVEST (since we only give invest-worthy deals)
     rec_score = 0.2 if recommendation == "INVEST" else (0.1 if recommendation == "CONDITIONAL" else 0.0)
     info["breakdown"]["recommendation"] = recommendation
     info["breakdown"]["recommendation_score"] = rec_score
 
-    total = round(sections_score + thesis_score + risk_score + rec_score, 4)
+    raw_total = round(sections_score + thesis_score + risk_score + rec_score, 4)
+    total = float(max(0.001, min(0.999, raw_total)))
     info["total_reward"] = total
     return total, info
 
@@ -116,13 +114,13 @@ def grade_portfolio(
     portfolio: List[PortfolioDeal],
     optimal_alloc: Dict[str, float],
 ) -> Tuple[float, Dict[str, Any]]:
-    """Grade Task 3: Portfolio Prioritization. Returns (reward, info) where reward in [0, 1]."""
+    """Grade Task 3: Portfolio Prioritization. Returns (reward, info) where reward in (0.001, 0.999)."""
     allocations = action.get("allocations", [])
     rationale = str(action.get("rationale", ""))
     info = {"breakdown": {}}
 
     if not allocations:
-        return 0.0, {"error": "No allocations provided", "total_reward": 0.0}
+        return 0.001, {"error": "No allocations provided", "total_reward": 0.001}
 
     # Build allocation map
     alloc_map: Dict[str, float] = {}
@@ -137,18 +135,15 @@ def grade_portfolio(
     constraint_violations = 0
     total_pct = sum(alloc_map.values())
 
-    # Check total roughly 100%
     if abs(total_pct - 100.0) > 5.0:
         constraint_violations += 1
 
-    # Check max 40% per deal
     for name, pct in alloc_map.items():
-        if pct > 42.0:  # small tolerance
+        if pct > 42.0:
             constraint_violations += 1
 
-    # Check min 10% if included
     for name, pct in alloc_map.items():
-        if 0 < pct < 8.0:  # small tolerance
+        if 0 < pct < 8.0:
             constraint_violations += 1
 
     max_violations = len(portfolio) + 2
@@ -158,7 +153,6 @@ def grade_portfolio(
     info["breakdown"]["constraint_score"] = round(constraint_score, 3)
 
     # 2. Return optimization (0.4 weight)
-    # Compare to optimal by weighted portfolio IRR
     agent_irr = 0.0
     optimal_irr = 0.0
     for deal in portfolio:
@@ -183,6 +177,7 @@ def grade_portfolio(
     info["breakdown"]["rationale_keyword_hits"] = rat_hits
     info["breakdown"]["rationale_score"] = round(rationale_score, 3)
 
-    total = round(constraint_score + return_score + rationale_score, 4)
+    raw_total = round(constraint_score + return_score + rationale_score, 4)
+    total = float(max(0.001, min(0.999, raw_total)))
     info["total_reward"] = total
     return total, info
