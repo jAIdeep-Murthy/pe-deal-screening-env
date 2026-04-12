@@ -36,9 +36,9 @@ MAX_TOKENS = 1024
 EPISODES_PER_TASK = 3
 
 TASKS = [
-    {"name": "deal_screening",         "max_steps": 1, "max_reward": 1.0},
-    {"name": "ic_memo",                 "max_steps": 1, "max_reward": 1.0},
-    {"name": "portfolio_prioritization", "max_steps": 1, "max_reward": 1.0},
+    {"name": "deal_screening",         "max_steps": 1, "max_reward": 1},
+    {"name": "ic_memo",                 "max_steps": 1, "max_reward": 1},
+    {"name": "portfolio_prioritization", "max_steps": 1, "max_reward": 1},
 ]
 
 SYSTEM_PROMPT = """You are an expert private equity associate. You will be given deal screening scenarios.
@@ -74,7 +74,7 @@ Asking EV/EBITDA: {deal['asking_ev_ebitda']}x
 Net Debt/EBITDA: {deal['net_debt_ebitda']}x
 
 Respond with ONLY valid JSON:
-{{"decision": "INVEST" or "PASS", "confidence": 0.0-1.0, "rationale": "your reasoning mentioning key metrics"}}"""
+{{"decision": "INVEST" or "PASS", "confidence": 0-1, "rationale": "your reasoning mentioning key metrics"}}"""
 
 
 def build_ic_memo_prompt(obs: Dict) -> str:
@@ -109,10 +109,10 @@ Constraints: max 40% in any single deal, min 10% if included. Maximize risk-adju
 Respond with ONLY valid JSON:
 {{
   "allocations": [
-    {{"company_name": "...", "allocation_mm": 20.0, "allocation_pct": 20.0, "rationale": "..."}},
+    {{"company_name": "...", "allocation_mm": 20, "allocation_pct": 20, "rationale": "..."}},
     ...
   ],
-  "total_deployed_mm": 100.0,
+  "total_deployed_mm": 100,
   "rationale": "overall portfolio rationale mentioning IRR, risk, diversification, sector allocation"
 }}"""
 
@@ -185,7 +185,7 @@ def run_episode(client: OpenAI, task_name: str, episode_num: int) -> Dict:
 def main():
     client = get_client()
     all_results = []
-    total_reward = 0.0
+    total_reward = 0
     total_episodes = 0
 
     for task_cfg in TASKS:
