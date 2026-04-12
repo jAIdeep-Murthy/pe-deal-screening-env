@@ -11,7 +11,6 @@ import requests
 from openai import OpenAI
 
 
-
 def log_start(task: str, env: str, model: str):
     print(json.dumps({"tag": "[START]", "task": task, "env": env, "model": model}), flush=True)
 
@@ -22,6 +21,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error=None):
 
 def log_end(success: bool, steps: int, score: float, rewards: list):
     print(json.dumps({"tag": "[END]", "success": success, "steps": steps, "score": score, "rewards": rewards}), flush=True)
+
 # ---------------------------------------------------------------------------
 # Configuration from environment variables (no hardcoded keys/URLs)
 # ---------------------------------------------------------------------------
@@ -36,9 +36,9 @@ MAX_TOKENS = 1024
 EPISODES_PER_TASK = 3
 
 TASKS = [
-    {"name": "deal_screening",           "max_steps": 1, "max_reward": 1.0},
-    {"name": "ic_memo",                   "max_steps": 1, "max_reward": 1.0},
-    {"name": "portfolio_prioritization",  "max_steps": 1, "max_reward": 1.0},
+    {"name": "deal_screening",         "max_steps": 1, "max_reward": 1.0},
+    {"name": "ic_memo",                 "max_steps": 1, "max_reward": 1.0},
+    {"name": "portfolio_prioritization", "max_steps": 1, "max_reward": 1.0},
 ]
 
 SYSTEM_PROMPT = """You are an expert private equity associate. You will be given deal screening scenarios.
@@ -102,8 +102,8 @@ def build_portfolio_prompt(obs: Dict) -> str:
     deals_str = ""
     for i, d in enumerate(portfolio, 1):
         deals_str += f"{i}. {d['company_name']} ({d['sector']}): IRR={d['expected_irr_pct']}%, Risk={d['risk_score']:.2f}, EV/EBITDA={d['asking_ev_ebitda']}x\n"
-    return f"""Allocate a $100M fund across these 5 deals. Constraints: max 40% in any single deal, min 10% if included.
-Maximize risk-adjusted returns.
+    return f"""Allocate a $100M fund across these 5 deals.
+Constraints: max 40% in any single deal, min 10% if included. Maximize risk-adjusted returns.
 
 {deals_str}
 Respond with ONLY valid JSON:
@@ -135,6 +135,11 @@ def parse_json_action(content: str) -> Dict:
     return {"error": "Failed to parse JSON", "raw": content[:200]}
 
 
+def clamp_score(value: float) -> float:
+    """Ensure score is strictly between 0 and 1 (not 0.0 and not 1.0)."""
+    return float(max(0.001, min(0.999, value)))
+
+
 def run_episode(client: OpenAI, task_name: str, episode_num: int) -> Dict:
     """Run a single episode for a given task."""
     # Reset
@@ -144,7 +149,7 @@ def run_episode(client: OpenAI, task_name: str, episode_num: int) -> Dict:
     obs = reset_data["observation"]
 
     log_start(task_name, BENCHMARK, MODEL_NAME)
-    
+
     # Build prompt based on task
     if task_name == "deal_screening":
         prompt = build_deal_screening_prompt(obs)
@@ -167,7 +172,7 @@ def run_episode(client: OpenAI, task_name: str, episode_num: int) -> Dict:
     # Step
     step_resp = requests.post(f"{SPACE_URL}/step", json={"episode_id": episode_id, "action": action})
     step_data = step_resp.json()
-    reward = step_data["reward"]
+    reward = clamp_score(step_data["reward"])
     done = step_data["done"]
     info = step_data.get("info", {})
 
