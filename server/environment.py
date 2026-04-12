@@ -57,7 +57,6 @@ def reset(task: Optional[str] = None, seed: Optional[int] = None) -> ResetRespon
             episode_id=episode_id,
             task=task,
         )
-
     elif task == "ic_memo":
         deal = generate_deal(seed)
         # For IC memo, we always use a deal that should be INVEST
@@ -84,7 +83,6 @@ def reset(task: Optional[str] = None, seed: Optional[int] = None) -> ResetRespon
             episode_id=episode_id,
             task=task,
         )
-
     elif task == "portfolio_prioritization":
         portfolio = generate_portfolio(seed)
         optimal_alloc = compute_optimal_allocation(portfolio)
@@ -115,7 +113,7 @@ def step(episode_id: str, action: Dict[str, Any]) -> StepResult:
 
     ep = _episodes[episode_id]
     if ep["done"]:
-        return StepResult(reward=0.0, done=True, info={"error": "Episode already done"})
+        return StepResult(reward=0.001, done=True, info={"error": "Episode already done"})
 
     task = ep["task"]
     ep["step"] += 1
@@ -139,9 +137,12 @@ def step(episode_id: str, action: Dict[str, Any]) -> StepResult:
                 optimal_alloc=ep["optimal_alloc"],
             )
         else:
-            reward, info = 0.0, {"error": f"Unknown task: {task}"}
+            reward, info = 0.001, {"error": f"Unknown task: {task}"}
     except Exception as e:
-        reward, info = 0.0, {"error": str(e), "action_received": action}
+        reward, info = 0.001, {"error": str(e), "action_received": action}
+
+    # Ensure reward is strictly between 0 and 1
+    reward = float(max(0.001, min(0.999, reward)))
 
     ep["done"] = True
     return StepResult(
@@ -156,6 +157,7 @@ def get_episode(episode_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve episode state (for debugging)."""
     return _episodes.get(episode_id)
 
+
 def get_state() -> Dict[str, Any]:
     """Get overall environment state."""
     return {
@@ -163,4 +165,3 @@ def get_state() -> Dict[str, Any]:
         "tasks": TASKS,
         "status": "ready",
     }
-    return _episodes.get(episode_id)
